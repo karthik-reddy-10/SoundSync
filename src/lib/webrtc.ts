@@ -6,6 +6,17 @@ export const ICE_SERVERS: RTCIceServer[] = [
       "stun:stun2.l.google.com:19302",
     ],
   },
+  // Public TURN helps when devices are on different networks / strict NATs.
+  // Replace with your own TURN credentials for production reliability.
+  {
+    urls: [
+      "turn:openrelay.metered.ca:80",
+      "turn:openrelay.metered.ca:443",
+      "turns:openrelay.metered.ca:443",
+    ],
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
 ];
 
 export function rtcConfig(): RTCConfiguration {
