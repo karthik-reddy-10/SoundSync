@@ -282,6 +282,13 @@ export function RoomClient({ code, initialRoom, initialDevices }: Props) {
       }
 
       if (signal.type === "control") {
+        // Listener asks host for a WebRTC offer (DB-polled; works on Vercel serverless)
+        if (signal.payload.action === "request-offer" && me.role === "host") {
+          if (streamRef.current) {
+            void offerToListener(signal.fromDeviceId);
+          }
+          return;
+        }
         if (typeof signal.payload.volume === "number") setVolume(signal.payload.volume);
         if (typeof signal.payload.muted === "boolean") setMuted(signal.payload.muted);
       }
@@ -370,6 +377,26 @@ export function RoomClient({ code, initialRoom, initialDevices }: Props) {
     return () => window.clearInterval(timer);
   }, [mode]);
 
+  // Host: keep a peer for every connected listener (multi-device on serverless)
+  useEffect(() => {
+    if (mode !== "active") return;
+    const timer = window.setInterval(() => {
+      const me = sessionRef.current;
+      if (!me || me.role !== "host" || !streamRef.current) return;
+      const listeners = devicesRef.current.filter(
+        (d) => d.role === "listener" && d.connected,
+      );
+      for (const listener of listeners) {
+        const pc = peersRef.current.get(listener.id);
+        const state = pc?.connectionState;
+        if (!pc || state === "failed" || state === "closed" || state === "disconnected") {
+          void offerToListener(listener.id);
+        }
+      }
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [mode, offerToListener]);
+
   useEffect(() => {
     if (mode !== "active") return;
     const requestLock = async () => {
@@ -419,6 +446,22 @@ export function RoomClient({ code, initialRoom, initialDevices }: Props) {
       if (data.devices) setDevices(data.devices);
       setMode("active");
       attachSignaling(info);
+
+      // If host is already live, request an offer via DB-backed signaling.
+      // SSE "device-joined" often never reaches the host on Vercel serverless.
+      if (data.room.status === "live") {
+        const hostDevice = (data.devices ?? []).find((d) => d.role === "host");
+        if (hostDevice) {
+          const ask = () => {
+            void signalingRef.current?.send(hostDevice.id, "control", {
+              action: "request-offer",
+            });
+          };
+          window.setTimeout(ask, 400);
+          window.setTimeout(ask, 2000);
+          window.setTimeout(ask, 5000);
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Join failed");
     } finally {
