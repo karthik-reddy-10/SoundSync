@@ -27,8 +27,10 @@ export const metadata: Metadata = {
     title: "Relay",
     statusBarStyle: "black-translucent",
   },
+  other: {
+    "google-adsense-account": "ca-pub-1434761684241032",
+  },
 };
-
 export const viewport: Viewport = {
   themeColor: "#080809",
   width: "device-width",
